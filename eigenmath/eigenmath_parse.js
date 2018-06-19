@@ -1,0 +1,468 @@
+// parse.js
+// Parser for Eigenmath syntax written in Simplified JavaScript
+// From Top Down Operator Precedence
+// http://javascript.crockford.com/tdop/index.html
+// Douglas Crockford
+// 2016-02-15
+
+//jslint for, this
+
+var make_parse = function () {
+	var symbol_table = {};
+	var pptoken; // previous previous token
+	var ptoken; // previous token
+	var token; // current token
+	var tokens; // lexed tokens
+	var token_nr; // index of current token
+	var newline_flag = 0;
+	var paren_depth = 0;
+	var brack_depth = 0;
+	var MIN_BP = 0; // minimal binding power
+	var MUL_BP = 40;
+	var MAX_BP = 10000; // maximal binding power
+
+	var minus_one = { // -1 literal constant
+		node: "Number",
+		value: -1
+	};
+
+	var nud_itself = function () { // used as nud
+		return this;
+	};
+
+	var led_multiplication = function (left) { // used as led
+		var right = expression(MUL_BP);
+		if ((left.value === "*") && (right.value === "*")) {
+			left.args = left.args.concat(right.args);
+			return left;
+		} else if ((left.value === "*") && (right.value !== "*")) {
+			left.args.push(right);
+			return left;
+		} else if ((left.value !== "*") && (right.value === "*")) {
+			right.args = [left].concat(right.args);
+			return right;
+		} else if ((left.value !== "*") && (right.value !== "*")) {
+			var result = Object.create(this);
+			result.node = "Multiplication";
+			result.value = "*";
+			result.args = [left, right];
+			return result;
+		}
+	}
+
+	var advance = function (id) { // get next token
+		var t;
+		var v;
+		var a;
+		var o;
+		if (id && token.id !== id) {
+			token.error("Expected '" + id + "'.");
+		}
+		newline_flag = 0;
+		while (token_nr < tokens.length && tokens[token_nr].type === "newline") {
+			newline_flag = 1;
+			token_nr += 1;
+		}
+		if (token_nr >= tokens.length) {
+			pptoken = ptoken;
+			ptoken = token;
+			token = symbol_table["(end)"];
+			return token;
+		}
+		t = tokens[token_nr];
+		token_nr += 1;
+		v = t.value;
+		a = t.type;
+		if (a === "string") {
+			a = "String";
+			o = symbol_table["(string)"];
+		} else if (a === "number") {
+			a = "Number";
+			o = symbol_table["(number)"];
+		} else if (a === "symbol") {
+			a = "Symbol";
+			o = symbol_table["(symbol)"];
+		} else if (a === "function") {
+			a = "Function";
+			o = symbol_table["(function)"];
+		} else if (a === "operator") {
+			a = "Operator";
+			o = symbol_table[v];
+			if (!o) {
+				t.error("Unknown operator.");
+			}
+		} else {
+			t.error("Unexpected token.");
+		}
+		pptoken = ptoken;
+		ptoken = token;
+		token = Object.create(o);
+		token.from = t.from;
+		token.to = t.to;
+		token.node = a;
+		token.value = v;
+		switch (token.id) {
+		case "(":
+			paren_depth++;
+			break;
+		case ")":
+			paren_depth--;
+			break;
+		case "[":
+			brack_depth++;
+			break;
+		case "]":
+			brack_depth--;
+			break;
+		}
+		return token;
+	};
+
+	var expression = function (rbp) { // Pratt's parse routine: parse from left to right until token.lbp <= rbp or nbp <= token.lbp
+		var newline_at_top_level;
+		var nbp;
+		var nud;
+		var led;
+		var left;
+		var lbp;
+
+		t = token;
+		nbp = t.nud_nbp;
+		advance();
+		left = t.nud();
+		t = token;
+		if (t.led) {
+			lbp = t.led_lbp;
+		} else if (t.nud) {
+			lbp = t.nud_lbp;
+		} else {
+			lbp = MIN_BP;
+		}
+		while (rbp < lbp && lbp < nbp) {
+			newline_at_top_level = (newline_flag === 1); // Eigenmath lacks && (paren_depth === 0) && (brack_depth === 0);
+			if (newline_at_top_level) {
+				if (t.nud !== null) {
+					if (t.led !== null) {
+						break;
+					} else if (t.led === null) {
+						break;
+					}
+				} else if (t.nud === null) {
+					if (t.led !== null) {
+						nbp = t.led_nbp;
+						advance();
+						left = t.led(left);
+					} else if (t.led === null) {
+						break;
+					}
+				}
+			} else if (!newline_at_top_level) {
+				if (t.nud !== null) {
+					if (t.led !== null) {
+						nbp = t.led_nbp;
+						advance();
+						left = t.led(left);
+					} else if (t.led === null) {
+						nbp = t.nud_nbp;
+						t.led = led_multiplication;
+						left = t.led(left);
+					}
+				} else if (t.nud === null) {
+					if (t.led !== null) {
+						nbp = t.led_nbp;
+						advance();
+						left = t.led(left);
+					} else if (t.led === null) {
+						break;
+					}
+				}
+			}
+			/*
+			if ((!newline_at_top_level || t.nud === null) && t.led !== null) { // Mathematica lacks t.nud === null
+			nbp = t.led_nbp;
+			advance();
+			left = t.led(left);
+			} else if (!newline_at_top_level && t.nud !== null && t.led === null) {
+			nbp = t.nud_nbp;
+			t.led = led_multiplication;
+			left = t.led(left);
+			} else
+			break;
+			 */
+			t = token;
+			if (t.led) {
+				lbp = t.led_lbp;
+			} else if (t.nud) {
+				lbp = t.nud_lbp;
+			} else {
+				lbp = MIN_BP;
+			}
+		}
+		return left;
+	};
+
+	var original_symbol = {
+		nud: null,
+		led: null
+	};
+
+	var symbol = function (id) {
+		var s = symbol_table[id];
+		if (!s) {
+			s = Object.create(original_symbol);
+			s.id = id;
+			s.value = id;
+			symbol_table[id] = s;
+		}
+		return s;
+	};
+
+	var register_nud = function (id, lbp, rbp, nbp, nud) {
+		var s = symbol(id);
+		s.nud_lbp = lbp; // left binding power
+		s.nud_rbp = rbp; // right binding power
+		s.nud_nbp = nbp; // next binding power (for non-associative operators)
+		s.nud = nud;
+		return s;
+	}
+
+	var register_led = function (id, lbp, rbp, nbp, led) {
+		var s = symbol(id);
+		s.led_lbp = lbp; // left binding power
+		s.led_rbp = rbp; // right binding power
+		s.led_nbp = nbp; // next binding power (for non-associative operators)
+		s.led = led;
+		return s;
+	}
+
+	var nilfix = function (id, bp, nud) {
+		return register_nud(id, bp, bp, MAX_BP, nud || nud_itself);
+	};
+
+	var prefix = function (id, bp, nud, node) {
+		return register_nud(id, MIN_BP, bp, bp + 1, nud || function () {
+			this.node = node;
+			this.args = [expression(bp)]; // nud_rbp
+			return this;
+		});
+	};
+
+	var suffix = function (id, bp, led, node) {
+		return register_led(id, bp, MIN_BP, bp + 1, led || function (left) {
+			this.node = node;
+			this.args = [left];
+			return this;
+		});
+	};
+
+	var infixL = function (id, bp, led, node) {
+		return register_led(id, bp, bp, bp + 1, led || function (left) {
+			this.node = node;
+			this.args = [left, expression(bp)]; // led_rbp
+			return this;
+		});
+	};
+
+	var infixR = function (id, bp, led, node) {
+		return register_led(id, bp, bp - 1, bp + 1, led || function (left) {
+			this.node = node;
+			this.args = [left, expression(bp - 1)]; // led_rbp
+			return this;
+		});
+	};
+
+	var infixN = function (id, bp, led, node) {
+		return register_led(id, bp, bp, bp, led || function (left) {
+			this.node = node;
+			this.args = [left, expression(bp)]; // led_rbp
+			return this;
+		});
+	};
+
+	var relation = function (id, node) {
+		return infixN(id, 20, null, node);
+	};
+
+	var assignment = function (id, node) {
+		return infixN(id, 10, null, node);
+	};
+
+	symbol("(end)");
+	symbol(",");
+	symbol(")");
+
+	nilfix("(number)", MUL_BP); // integer and float
+	nilfix("(string)", MUL_BP);
+	nilfix("(symbol)", MUL_BP); // bp of multiplication
+
+	nilfix("(function)", MUL_BP, function () {
+		advance("(");
+		var a = [];
+		if (token.id !== ")") {
+			while (true) {
+				a.push(expression(0));
+				if (token.id !== ",") {
+					break;
+				}
+				advance(",");
+			}
+		}
+		advance(")");
+		this.node = "FunctionCall";
+		this.args = a;
+		return this;
+	});
+
+	nilfix("(", MUL_BP, function () { // array definition
+		var a = [];
+		//if (token.id !== ")") {
+		while (true) {
+			a.push(expression(0));
+			if (token.id !== ",") {
+				break;
+			}
+			advance(",");
+		}
+		//}
+		advance(")");
+		this.node = "ArrayExpression";
+		this.args = a;
+		return this;
+	});
+
+	symbol("]");
+	infixL("[", 70, function (left) { // array access by index
+		var a = [];
+		//if (token.id !== "]") {
+		while (true) {
+			a.push(expression(0));
+			if (token.id !== ",") {
+				break;
+			}
+			advance(",");
+		}
+		//}
+		advance("]");
+		this.node = "ArrayAccessByIndex";
+		this.value = left;
+		this.args = a;
+		return this;
+	});
+
+	suffix("!", 60, null, "Factorial"); // factorial
+	infixR("^", 50, null, "Exponentiation"); // exponentiation
+
+	infixL("*", MUL_BP, led_multiplication);
+
+	infixL("/", MUL_BP, function (left) { // division
+		var right = expression(MUL_BP);
+		var result = {};
+		result.value = "^";
+		result.node = "Exponentiation";
+		result.args = [right, minus_one];
+		if (left.value === "*") {
+			left.args.push(result);
+			return left;
+		} else if (left.value !== "*") {
+			this.value = "*";
+			this.node = "Multiplication";
+			this.args = [left, result];
+			return this;
+		}
+	});
+
+	infixL("-", 30, function (left) { // subtraction
+		var right = expression(30);
+		var result = {};
+		if (right.value === "*") {
+			right.args = [minus_one].concat(right.args);
+			result = right;
+		} else if (right.value !== "*") {
+			result.value = "*";
+			result.node = "Multiplication";
+			result.args = [minus_one, right];
+		}
+		if (left.value === "+") {
+			left.args.push(result);
+			return left;
+		} else if (left.value !== "+") {
+			this.value = "+";
+			this.node = "Addition";
+			this.args = [left, result];
+			return this;
+		}
+	});
+
+	infixL("+", 30, function (left) { // addition
+		var right = expression(30);
+		if ((left.value === "+") && (right.value === "+")) {
+			left.args = left.args.concat(right.args);
+			return left;
+		} else if ((left.value === "+") && (right.value !== "+")) {
+			left.args.push(right);
+			return left;
+		} else if ((left.value !== "+") && (right.value === "+")) {
+			right.args = [left].concat(right.args);
+			return right;
+		} else if ((left.value !== "+") && (right.value !== "+")) {
+			this.value = "+";
+			this.node = "Addition";
+			this.args = [left, right];
+			return this;
+		}
+	});
+
+	prefix("-", 30, function () { // - sign
+		if (pptoken) {
+			if (["+", "-", "++", "--"].indexOf(pptoken.value) !== -1) {
+				ptoken.error("Unary - not allowed after +, -, ++ or --.");
+			}
+		}
+		var right = expression(30);
+		if (right.value === "*") {
+			right.args = [minus_one].concat(right.args);
+			return right;
+		} else if (right.value !== "*") {
+			this.value = "*";
+			this.node = "Multiplication";
+			this.args = [minus_one, right];
+			return this;
+		}
+	});
+
+	prefix("+", 30, function () { // + sign
+		if (pptoken) {
+			if (["+", "-", "++", "--"].indexOf(pptoken.value) !== -1) {
+				ptoken.error("Unary + not allowed after +, -, ++ or --.");
+			}
+		}
+		var right = expression(30);
+		return right;
+	});
+
+	relation(">", "Greater");
+	relation("<", "Less");
+	relation(">=", "GreaterEqual");
+	relation("<=", "LessEqual");
+	relation("==", "Equal");
+
+	assignment("=", "Assignment");
+
+	return function (source) {
+		var result = [];
+		tokens = source.math_tokens("!#%&*+-/<=>^|", "&+<=>|");
+		token_nr = 0;
+		if (tokens) {
+			advance();
+			do {
+				if (token.id !== "(end)") {
+					result.push(expression(0));
+				} else {
+					break;
+				}
+			} while (newline_flag == 1);
+			advance("(end)");
+		}
+		return result;
+	};
+};
