@@ -15,7 +15,6 @@ var make_parse = function () {
 	var MUL_BP = 150; // multiplication binding power
 	var MAX_BP = 1200; // maximal binding power
 	var implicit = true; // implicit multiplication allowed?
-	var assoc_to_left = false; // at same precedence associate to the left-associative operator or to the right-associative operator?
 
 	var advance = function (id) { // get next token
 		var t;
@@ -125,33 +124,22 @@ var make_parse = function () {
 				pre2 = symbol_table["*"].lef_pre;
 				lbp2 = symbol_table["*"].lef_lbp;
 				rbp2 = symbol_table["*"].lef_rbp;
-			} else {
-				pre2 = MAX_BP + 1;
-				lbp2 = MAX_BP + 1;
-				rbp2 = MAX_BP + 1;
+			} else 
+				break; // exit because current token is of neither legal type 
+			if (rbp1 < lbp2)
+				break; // reduce
+			if (rbp1 === lbp2) {
+				if (pre1 < pre2) 
+					break; // reduce
+				if (pre1 === pre2) {
+					if (rbp1 < pre1)
+						op1.error("parse: two non-associative operators at same precedence!");
+					if (rbp1 === pre1) {
+						op1.error("parse: ambiguity - two associative operators at same precedence!");
+					}
+				}
 			}
-			if (pre1 < pre2) // op1 has higher precedence than op2
-				break;
-			if (pre1 === pre2) { // op1 has same precedence as op2
-				if (isN(pre1, lbp1, rbp1))
-					return op1.error("parse: non-associative operator!");
-				if (isN(pre2, lbp2, rbp2))
-					return token.error("parse: non-associative operator!");
-				if (isL(pre1, lbp1, rbp1) && isR(pre2, lbp2, rbp2))
-					if (assoc_to_left)
-						break;
-				if (isR(pre1, lbp1, rbp1) && isL(pre2, lbp2, rbp2))
-					if (!assoc_to_left)
-						break;
-				if (isL(pre1, lbp1, rbp1) && isL(pre2, lbp2, rbp2))
-					break;
-/*			
-				if ((rbp1 <= lbp2) &&
-					!(rbp1 === lbp2 && !assoc_to_left && symbol_table[token.id].lef_typ && lbp2 < rbp2) && // at same precedence associate to the right-associative operator
-				    !(rbp1 === lbp2 &&  assoc_to_left && symbol_table[token.id].lef_typ && lbp1 <= rbp1)) // at same precedence associate to the left-associative operator
-					break;
-*/
-			}
+			// shift
 			newline_at_top_level = ((newline_flag === 1) && (paren_depth === 0) && (brack_depth === 0));
 			if ((!newline_at_top_level || !(symbol_table[token.id].nul_typ)) && symbol_table[token.id].lef_typ) {
 				left = lef_type(left);
@@ -230,10 +218,10 @@ var make_parse = function () {
 		operator.list = result;
 		operator.left = lval;
 		operator.right = p;  
-		//if (lval[0].pre <= operator.lbp && p[0].pre <= operator.rbp)
+		if (lval.pre <= operator.lbp && p.pre <= operator.rbp)
 			return operator;
-		//else
-		//	operator.error("infix: precedence error!");
+		else
+			operator.error("infix: precedence error!");
 	}
 
 	var impl_mul = function (lval, operator) {
