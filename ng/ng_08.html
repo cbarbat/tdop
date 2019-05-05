@@ -1,0 +1,99 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Top Down Operator Precedence</title>
+</head>
+
+<body bgcolor=linen>
+<h1>Next Generation 8</h1>
+
+<p>Input here a mathematical expression and then press the button: </p>
+<textarea id="INPUT" style="
+    border: 2px solid black;
+    color: black;
+    font-family: monospace;
+    height: 1in;
+    overflow: auto;
+    padding: 0.5em;
+    width: 100%;">-1+2</textarea>
+<input id="PARSE" value=Parse type=button>
+<noscript><p>You may not see it because you have JavaScript turned off. Uffff!</p></noscript>
+<script src="ng_tokens.js"></script>
+<script src="ng_parse_08.js"></script>
+<script src="ng_unparse_08.js"></script>
+<textarea id="OUTPUT" style="
+    border: 2px solid black;
+    color: black;
+    font-family: monospace;
+    height: 1in;
+    overflow: auto;
+    padding: 0.5em;
+    width: 100%;"></textarea>
+<pre id="TREE"></pre>
+<script>
+/*jslint evil: true */
+
+/*members create, error, message, name, prototype, stringify, toSource,
+    toString, write
+*/
+
+/*global JSON, make_parse, parse, source, tree */
+
+// Make a new object that inherits members from an existing object.
+
+if (typeof Object.create !== 'function') {
+    Object.create = function (o) {
+        function F() {}
+        F.prototype = o;
+        return new F();
+    };
+}
+
+// Transform a token object into an exception object and throw it.
+
+Object.prototype.error = function (message, t) {
+    t = t || this;
+    t.name = "SyntaxError";
+    t.message = message;
+    throw t;
+};
+
+
+(function () {
+    var parse, unparse;
+
+    function go(source) {
+        var string, tree, output;
+        try {
+			parse = make_parse();
+            tree = parse(source);
+            string = JSON.stringify(tree, ['key', 'name', 'message',
+                'node', 'pre', 'lbp', 'rbp', 'value', 'left', 'right', 'args', 'list'], 2);
+        } catch (e) {
+            string = JSON.stringify(e, ['name', 'message', 'from', 'to', 'key',
+                    'node', 'pre', 'lbp', 'rbp', 'value', 'left', 'right', 'args', 'list'], 2);
+        }
+		unparse = make_unparse();
+		output = "";
+		if (tree) 
+			output = unparse(tree);
+
+        document.getElementById('OUTPUT').innerHTML = output
+            .replace(/&/g, '&amp;')
+            .replace(/[<]/g, '&lt;');
+		document.getElementById('TREE').innerHTML = string
+            .replace(/&/g, '&amp;')
+            .replace(/[<]/g, '&lt;');
+    }
+
+    go(document.getElementById('INPUT').value);
+
+    document.getElementById('PARSE').onclick = function (e) {
+        go(document.getElementById('INPUT').value);
+    };
+}());
+
+</script>
+</pre>
+</body>
+</html>

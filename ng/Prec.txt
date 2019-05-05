@@ -1,0 +1,84 @@
+Token	OpType	Prec	Function
+---------------------------------
+Num	nilfix	0	LiteralNumber   // MAX_PREC
+Str	nilfix	0	LiteralString
+Sym	nilfix	0	LiteralSymbol
+(	prefix	0	Grouping (e.g. (2+3)*4)
+)	symbol	
+[	prefix	0	arbitrary Array (e.g. [[1,2],3])
+]	symbol	
+,	symbol		Sequence
+---------------------------------
+[	infixL	10	Array access (e.g. m[i, j])
+---------------------------------
+(	infixL	20	FunctionCall (e.g. f(), f(a), f(a,b))
+---------------------------------
+++	suffix	30	PostIncrement
+--	suffix	30	PostDecrement
+---------------------------------
+++	prefix	40	PreIncrement
+--	prefix	40	PreDecrement
+---------------------------------
+!	suffix	50	Factorial
+---------------------------------
+^	infixR	60	Power
+---------------------------------
++	prefix	70	Plus (not after +,-,++,--)
+-	prefix	70	Minus (not after +,-,++,--)
+---------------------------------
+*	infixL	80	Multiply
+/	infixL	80	Divide
+---------------------------------
+%	infixL	90	Modulo
+---------------------------------
++	infixL	100	Add
+-	infixL	100	Subtract
+---------------------------------
+~	prefix	110	BitNot
+---------------------------------
+<<	infixL	120	LeftShift
+>>	infixL	120	RightShift
+>>>	infixL	120	RightShiftUnsigned
+---------------------------------
+&	infixL	130	BitAnd
+---------------------------------
+#	infixL	140	BitXor
+---------------------------------
+|	infixL	150	BitOr
+---------------------------------
+<	infixN	160	Less
+<=	infixN	160	LessEqual
+>	infixN	160	Greater
+>=	infixN	160	GreaterEqual
+==	infixN	160	Equal
+!=	infixN	160	NotEqual
+---------------------------------
+!	prefix	170	LogicalNot
+---------------------------------
+&&	infixL	180	LogicalAnd
+---------------------------------
+||	infixL	190	LogicalOr
+---------------------------------
+?	infixR	200	Conditional (e.g. a?b:c)
+:	symbol	
+---------------------------------
+=	infixR	210	Assignment
+^=	infixR	210	AssignmentPower
+*=	infixR	210	AssignmentMultiply
+/=	infixR	210	AssignmentDivide
+%=	infixR	210	AssignmentModulo
++=	infixR	210	AssignmentAdd
+-=	infixR	210	AssignmentSubtract
+<<=	infixR	210	AssignmentLeftShift
+>>=	infixR	210	AssignmentRightShift
+>>>=	infixR	210	AssignmentRightShiftUnsigned
+&=	infixR	210	AssignmentBitAnd
+#=	infixR	210	AssignmentBitXor
+|=	infixR	210	AssignmentBitOr
+---------------------------------
+;	infixL	220	CompoundExpression
+---------------------------------
+
+Lexer: 
+First:  !#%&*+-/<=>^|
+Follow: &+-<=>|
